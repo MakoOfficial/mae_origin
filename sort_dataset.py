@@ -14,14 +14,14 @@ def sortDataset(data_dir, DF):
     """创建新的数据集"""
     for idx, row in DF.iterrows():
         # 获取当前文件路径
-        filename = os.path.join(data_dir, 'train', f"{row['id']}.png")
+        filename = os.path.join(data_dir, 'boneage-training-dataset', f"{row['id']}.png")
         # 获取该文件的标签
         label = str(row['boneage'])
-        copyfile(filename, os.path.join('../../autodl-tmp', 'sorted_dataset', label))
+        copyfile(filename, os.path.join('../../autodl-tmp', 'train', label))
 
 
 def reorg_aug_data(data_dir):
-    df = pd.read_csv(os.path.join(data_dir, 'train.csv'))
+    df = pd.read_csv(os.path.join(data_dir, 'boneage-training-dataset.csv'))
     sortDataset(data_dir, df)
 
 if __name__ == '__main__':

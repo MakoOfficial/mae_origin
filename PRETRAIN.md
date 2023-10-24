@@ -18,11 +18,11 @@ python submitit_pretrain.py \
 
 ```
 python submitit_pretrain.py \
-    --job_dir './job_dir/'\
-    --nodes 2 \
+    --job_dir '../../autodl-tmp/job_dir/'\
+    --nodes 1 \
     --ngpus 2 \
     --batch_size 64 \
-    --accum_iter 16 \
+    --accum_iter 32 \
     --model mae_vit_base_patch16 \
     --mask_ratio 0.75 \
     --epochs 800 \

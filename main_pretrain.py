@@ -34,6 +34,8 @@ import models_mae
 
 from engine_pretrain import train_one_epoch
 
+print(torch.cuda.is_available())
+
 
 def get_args_parser():
     parser = argparse.ArgumentParser('MAE pre-training', add_help=False)
@@ -72,7 +74,7 @@ def get_args_parser():
                         help='epochs to warmup LR')
 
     # Dataset parameters
-    parser.add_argument('--data_path', default='/datasets01/imagenet_full_size/061417/', type=str,
+    parser.add_argument('--data_path', default='../../autodl-tmp/', type=str,
                         help='dataset path')
 
     parser.add_argument('--output_dir', default='../../autodl-tmp/job_dir/',
@@ -121,10 +123,10 @@ def main(args):
 
     # simple augmentation
     transform_train = transforms.Compose([
-            transforms.RandomResizedCrop(args.input_size, scale=(0.2, 1.0), interpolation=3),  # 3 is bicubic
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+        transforms.RandomResizedCrop(args.input_size, scale=(0.2, 1.0), interpolation=3),  # 3 is bicubic
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
     dataset_train = datasets.ImageFolder(os.path.join(args.data_path, 'train'), transform=transform_train)
     print(dataset_train)
 
@@ -151,7 +153,7 @@ def main(args):
         pin_memory=args.pin_mem,
         drop_last=True,
     )
-    
+
     # define the model
     model = models_mae.__dict__[args.model](norm_pix_loss=args.norm_pix_loss)
 
@@ -161,7 +163,7 @@ def main(args):
     print("Model = %s" % str(model_without_ddp))
 
     eff_batch_size = args.batch_size * args.accum_iter * misc.get_world_size()
-    
+
     if args.lr is None:  # only base_lr is specified
         args.lr = args.blr * eff_batch_size / 256
 
@@ -174,7 +176,7 @@ def main(args):
     if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=True)
         model_without_ddp = model.module
-    
+
     # following timm: set wd as 0 for bias and norm layers
     param_groups = optim_factory.add_weight_decay(model_without_ddp, args.weight_decay)
     optimizer = torch.optim.AdamW(param_groups, lr=args.lr, betas=(0.9, 0.95))
@@ -200,7 +202,7 @@ def main(args):
                 loss_scaler=loss_scaler, epoch=epoch)
 
         log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
-                        'epoch': epoch,}
+                     'epoch': epoch, }
 
         if args.output_dir and misc.is_main_process():
             if log_writer is not None:

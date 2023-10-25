@@ -195,7 +195,7 @@ class MaskedAutoencoderViT(nn.Module):
 
         return x
 
-    def forward_loss(self, imgs, pred, mask):
+    def forward_loss(self, imgs, pred, mask, mask_ratio):
         """
         imgs: [N, 3, H, W]
         pred: [N, L, p*p*3]
@@ -209,14 +209,29 @@ class MaskedAutoencoderViT(nn.Module):
 
         loss = (pred - target) ** 2
         loss = loss.mean(dim=-1)  # [N, L], mean loss per patch
+        mask_loss = loss * mask
+        loss = (mask_loss).sum() / mask.sum()  # mean loss on removed patches
 
-        loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
+        L = int(mask_loss.shape[1] * mask_ratio * 0.5)
+        B = mask_loss.shape[0]
+        ids_sort = torch.argsort(mask_loss, dim=1, descending=True)
+        ids_restore = torch.argsort(ids_sort, dim=1)
+        mask_tmp = torch.zeros([B, mask_loss.shape[1]], device=mask_loss.device)
+        loss_weight = torch.arange(L, 0, step=-1, device=loss.device).repeat(B, 1)
+        mask_tmp[:, :L] = loss_weight
+        # unshuffle to get the binary mask
+        mask_tmp = torch.gather(mask_tmp, dim=1, index=ids_restore)
+        adaptive_loss = mask_loss * mask_tmp
+        adaptive_loss = (adaptive_loss * loss_weight).sum() / mask_tmp.sum()
+
+        loss = loss + adaptive_loss
+        # loss = ()
         return loss
 
     def forward(self, imgs, mask_ratio=0.75):
         latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio)
         pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
-        loss = self.forward_loss(imgs, pred, mask)
+        loss = self.forward_loss(imgs, pred, mask, mask_ratio)
         return loss, pred, mask
 
 

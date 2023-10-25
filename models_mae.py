@@ -222,8 +222,7 @@ class MaskedAutoencoderViT(nn.Module):
         mask_tmp[:, :L] = loss_weight
         # unshuffle to get the binary mask
         mask_tmp = torch.gather(mask_tmp, dim=1, index=ids_restore)
-        adaptive_loss = mask_loss * mask_tmp
-        adaptive_loss = (adaptive_loss * loss_weight).sum() / mask_tmp.sum()
+        adaptive_loss = (mask_loss * mask_tmp).sum() / mask_tmp.sum()
 
         loss = loss + adaptive_loss
         # loss = ()

@@ -12,12 +12,17 @@ def copyfile(fname, target_dir):
 
 def sortDataset(data_dir, DF):
     """创建新的数据集"""
+    length = len(DF)
     for idx, row in DF.iterrows():
         # 获取当前文件路径
         filename = os.path.join(data_dir, 'boneage-training-dataset', f"{row['id']}.png")
         # 获取该文件的标签
         label = str(row['boneage'])
         copyfile(filename, os.path.join('../../autodl-tmp', 'train', label))
+
+        if int(idx) > length/2:
+            break
+            
 
 
 def reorg_aug_data(data_dir):

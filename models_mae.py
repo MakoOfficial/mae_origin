@@ -129,9 +129,9 @@ class MaskedAutoencoderViT(nn.Module):
         """
         N, L, D = x.shape  # batch, length, dim
         len_keep = int(L * (1 - mask_ratio))
-        
+
         noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]
-        
+
         # sort noise for each sample
         ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
         ids_restore = torch.argsort(ids_shuffle, dim=1)
@@ -148,16 +148,26 @@ class MaskedAutoencoderViT(nn.Module):
 
         return x_masked, mask, ids_restore
 
-    def forward_encoder(self, x, mask_ratio):
-        # embed patches
-        x = self.patch_embed(x)
+    def adaptive_masking(self, x, ids_keep, ids_restore):
+        """
+        Perform per-sample adaptively masking by per-sample.
+        Per-sample adapted is done by the loss distribution.
+        x: [N, L, D], sequence
+        """
+        N, L, D = x.shape  # batch, length, dim
 
-        # add pos embed w/o cls token
-        x = x + self.pos_embed[:, 1:, :]
+        x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
 
-        # masking: length -> length * mask_ratio
-        x, mask, ids_restore = self.random_masking(x, mask_ratio)
+        len_keep = ids_keep.shape[1]
+        # generate the binary mask: 0 is keep, 1 is remove
+        mask = torch.ones([N, L], device=x.device)
+        mask[:, :len_keep] = 0
+        # unshuffle to get the binary mask
+        mask = torch.gather(mask, dim=1, index=ids_restore)
 
+        return x_masked, mask, ids_restore
+
+    def forward_encoder(self, x):
         # append cls token
         cls_token = self.cls_token + self.pos_embed[:, :1, :]
         cls_tokens = cls_token.expand(x.shape[0], -1, -1)
@@ -168,7 +178,7 @@ class MaskedAutoencoderViT(nn.Module):
             x = blk(x)
         x = self.norm(x)
 
-        return x, mask, ids_restore
+        return x
 
     def forward_decoder(self, x, ids_restore):
         # embed tokens
@@ -210,29 +220,41 @@ class MaskedAutoencoderViT(nn.Module):
 
         loss = (pred - target) ** 2
         loss = loss.mean(dim=-1)  # [N, L], mean loss per patch
-        mask_loss = loss * mask
-        loss = (mask_loss).sum() / mask.sum()  # mean loss on removed patches
+        # mask_loss = loss * mask
+        loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
 
-        L = int(mask_loss.shape[1] * (1 - mask_ratio) ** 0.5)
-        B = mask_loss.shape[0]
-        ids_sort = torch.argsort(mask_loss, dim=1, descending=True)
+        # generate adaptive mask
+        mask_loss = (loss*mask).detach().item()
+        N, L, D = target.shape
+        len_keep = int(L * (1 - (mask_ratio/3)))
+
+        ids_sort = torch.argsort(mask_loss, dim=1)
         ids_restore = torch.argsort(ids_sort, dim=1)
-        mask_tmp = torch.zeros([B, mask_loss.shape[1]], device=mask_loss.device)
-        loss_weight = torch.arange(L, 0, step=-1, device=loss.device).repeat(B, 1)
-        mask_tmp[:, :L] = loss_weight
-        # unshuffle to get the binary mask
-        mask_tmp = torch.gather(mask_tmp, dim=1, index=ids_restore)
-        adaptive_loss = (mask_loss * mask_tmp).sum() / mask_tmp.sum()
 
-        loss = loss + adaptive_loss
-        # loss = ()
-        return loss
+        # index of the unmasked patch
+        ids_keep = ids_sort[:, :len_keep]
 
-    def forward(self, imgs, mask_ratio=0.75):
-        latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio)
+        return loss, ids_keep, ids_restore
+
+    def forward(self, imgs, ids_keep, ids_restore, mask_ratio=0.75, isAdapted=False):
+        # embed patches
+        x = self.patch_embed(imgs)
+
+        # add pos embed w/o cls token
+        x = x + self.pos_embed[:, 1:, :]
+
+        if not isAdapted:
+            # masking: length -> length * mask_ratio
+            x, mask, ids_restore = self.random_masking(x, mask_ratio)
+        
+        else:
+            # adaptive masking: length -> length * (mask_ratio/3)
+            x, mask, ids_restore = self.adaptive_masking(x, ids_keep, ids_restore)
+            
+        latent = self.forward_encoder(x)
         pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
-        loss = self.forward_loss(imgs, pred, mask, mask_ratio)
-        return loss, pred, mask
+        loss, ids_keep, ids_restore = self.forward_loss(imgs, pred, mask, mask_ratio)
+        return loss, pred, mask, ids_keep, ids_restore
 
 
 def mae_vit_base_patch16_dec512d8b(**kwargs):

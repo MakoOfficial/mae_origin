@@ -213,7 +213,7 @@ class MaskedAutoencoderViT(nn.Module):
         mask_loss = loss * mask
         loss = (mask_loss).sum() / mask.sum()  # mean loss on removed patches
 
-        L = int(mask_loss.shape[1] * mask_ratio * 0.5)
+        L = int(mask_loss.shape[1] * (1 - mask_ratio) ** 0.5)
         B = mask_loss.shape[0]
         ids_sort = torch.argsort(mask_loss, dim=1, descending=True)
         ids_restore = torch.argsort(ids_sort, dim=1)

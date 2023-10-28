@@ -44,7 +44,7 @@ def get_args_parser():
     parser = argparse.ArgumentParser('MAE pre-training', add_help=False)
     parser.add_argument('--batch_size', default=128, type=int,
                         help='Batch size per GPU (effective batch size is batch_size * accum_iter * # gpus')
-    parser.add_argument('--epochs', default=800, type=int)
+    parser.add_argument('--epochs', default=801, type=int)
     parser.add_argument('--accum_iter', default=16, type=int,
                         help='Accumulate gradient iterations (for increasing the effective batch size under memory constraints)')
 
@@ -90,7 +90,7 @@ def get_args_parser():
     parser.add_argument('--resume', default='',
                         help='resume from checkpoint')
 
-    parser.add_argument('--start_epoch', default=0, type=int, metavar='N',
+    parser.add_argument('--start_epoch', default=1, type=int, metavar='N',
                         help='start epoch')
     parser.add_argument('--num_workers', default=10, type=int)
     parser.add_argument('--pin_mem', action='store_true',
@@ -138,7 +138,7 @@ def main(args):
     # init mask list
     init_mask = [1] * 196
     mask = [init_mask] * mask_len
-    mask = torch.tensor(mask)
+    mask = torch.tensor(mask, dtype=torch.float)
 
     if True:  # args.distributed:
         num_tasks = misc.get_world_size()
@@ -198,12 +198,13 @@ def main(args):
     print(f"Start training for {args.epochs} epochs")
     start_time = time.time()
 
+    # ==========================================================
     # preprocessing for the ramdon masking
     if args.distributed:
-        data_loader_train.sampler.set_epoch(epoch)
+        data_loader_train.sampler.set_epoch(0)
     train_stats = init_epoch.init_epoch(
         model, data_loader_train,
-        optimizer, device, epoch, loss_scaler, mask, mask_ratio=0.75,
+        optimizer, device, 0, loss_scaler, mask, mask_ratio=0.75,
         log_writer=log_writer,
         args=args
     )
@@ -227,7 +228,7 @@ def main(args):
             log_writer=log_writer,
             args=args
         )
-        if args.output_dir and ((epoch + 1) % 200 == 0 or epoch + 1 == args.epochs):
+        if args.output_dir and (epoch % 200 == 0 or epoch + 1 == args.epochs):
             misc.save_model(
                 args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
                 loss_scaler=loss_scaler, epoch=epoch)

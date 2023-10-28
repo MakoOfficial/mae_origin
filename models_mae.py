@@ -205,7 +205,6 @@ class MaskedAutoencoderViT(nn.Module):
         loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
 
         # generate adaptive mask
-        print(f"adaptive_loss:{adaptive_loss.shape}")
         N, L, D = target.shape
         len_keep = int(L - (mask.sum() / N))
 

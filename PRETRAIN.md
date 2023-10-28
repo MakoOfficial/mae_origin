@@ -33,16 +33,12 @@ python submitit_pretrain.py \
 
 ```
 CUDA_VISIBLE_DEVICES=0,1 OMP_NUM_THREADS=1 python -m torch.distributed.launch --nproc_per_node=2 main_pretrain.py \
---batch_size 64 \
---accum_iter 32 \
+--batch_size 128 \
 --model mae_vit_base_patch16 \
 --mask_ratio 0.75 \
 --epochs 800 \
 --warmup_epochs 40 \
---blr 1.5e-4 --weight_decay 0.05 \
---data_path ../../autodl-tmp/ \
---output_dir ../../autodl-tmp/job_dir/ \
---log_dir ../../autodl-tmp/job_dir/ \
+--blr 1.5e-4 --weight_decay 0.05
 ```
 
 - Here the effective batch size is 64 (`batch_size` per gpu) * 8 (`nodes`) * 8 (gpus per node) = 4096. If memory or # gpus is limited, use `--accum_iter` to maintain the effective batch size, which is `batch_size` (per gpu) * `nodes` * 8 (gpus per node) * `accum_iter`.

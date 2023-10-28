@@ -9,6 +9,7 @@
 # --------------------------------------------------------
 
 import os
+from typing import Any, Tuple
 import PIL
 
 from torchvision import datasets, transforms
@@ -63,3 +64,11 @@ def build_transform(is_train, args):
     t.append(transforms.ToTensor())
     t.append(transforms.Normalize(mean, std))
     return transforms.Compose(t)
+
+from torchvision.datasets.folder import ImageFolder
+
+class TrainDataset(ImageFolder):
+    """Override the Dataset to be able returing the index after sample"""
+
+    def __getitem__(self, index: int) -> Tuple[Any, Any]:
+        return super().__getitem__(index), index

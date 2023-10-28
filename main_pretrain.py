@@ -21,6 +21,7 @@ import torch.backends.cudnn as cudnn
 from torch.utils.tensorboard import SummaryWriter
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
+from util.datasets import TrainDataset
 
 import timm
 
@@ -33,6 +34,8 @@ from util.misc import NativeScalerWithGradNormCount as NativeScaler
 import models_mae
 
 from engine_pretrain import train_one_epoch
+
+import init_epoch
 
 print(torch.cuda.is_available())
 
@@ -127,8 +130,15 @@ def main(args):
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-    dataset_train = datasets.ImageFolder(os.path.join(args.data_path, 'train'), transform=transform_train)
+    dataset_train = TrainDataset(os.path.join(args.data_path, 'train'), transform=transform_train)
     print(dataset_train)
+
+    # init mask
+    mask_len = len(dataset_train)
+    # init mask list
+    init_mask = [1] * 196
+    mask = [init_mask] * mask_len
+    mask = torch.tensor(mask)
 
     if True:  # args.distributed:
         num_tasks = misc.get_world_size()
@@ -187,12 +197,33 @@ def main(args):
 
     print(f"Start training for {args.epochs} epochs")
     start_time = time.time()
+
+    # preprocessing for the ramdon masking
+    if args.distributed:
+        data_loader_train.sampler.set_epoch(epoch)
+    train_stats = init_epoch.init_epoch(
+        model, data_loader_train,
+        optimizer, device, epoch, loss_scaler, mask, mask_ratio=0.75,
+        log_writer=log_writer,
+        args=args
+    )
+
+    log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
+                 'epoch': "init epoch", }
+
+    if args.output_dir and misc.is_main_process():
+        if log_writer is not None:
+            log_writer.flush()
+        with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
+            f.write(json.dumps(log_stats) + "\n")
+    # ==========================================================
+
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             data_loader_train.sampler.set_epoch(epoch)
         train_stats = train_one_epoch(
             model, data_loader_train,
-            optimizer, device, epoch, loss_scaler,
+            optimizer, device, epoch, loss_scaler, mask,
             log_writer=log_writer,
             args=args
         )

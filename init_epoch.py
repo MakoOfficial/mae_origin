@@ -1,13 +1,3 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
-# --------------------------------------------------------
-# References:
-# DeiT: https://github.com/facebookresearch/deit
-# BEiT: https://github.com/microsoft/unilm/tree/master/beit
-# --------------------------------------------------------
 import math
 import sys
 from typing import Iterable
@@ -18,15 +8,39 @@ import util.misc as misc
 import util.lr_sched as lr_sched
 
 
-def train_one_epoch(model: torch.nn.Module,
+def random_masking(imgs, mask_ratio, img_size=224, patch_size=16):
+    """
+    Perform per-sample random masking by per-sample shuffling.
+    Per-sample shuffling is done by argsort random noise.
+    x: [N, L, D], sequence
+    """
+    N = imgs.shape[0]
+    L = int(img_size/patch_size)**2
+    len_keep = int(L * (1 - mask_ratio))
+
+    noise = torch.rand(N, L, device=imgs.device)  # noise in [0, 1]
+
+    # sort noise for each sample
+    ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
+    ids_restore = torch.argsort(ids_shuffle, dim=1)
+
+    # generate the binary mask: 0 is keep, 1 is remove
+    mask = torch.ones([N, L], device=imgs.device)
+    mask[:, :len_keep] = 0
+    # unshuffle to get the binary mask
+    mask = torch.gather(mask, dim=1, index=ids_restore)
+
+    return mask
+
+def init_epoch(model: torch.nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,
-                    device: torch.device, epoch: int, loss_scaler, mask,
+                    device: torch.device, epoch: int, loss_scaler, mask, mask_ratio,
                     log_writer=None,
                     args=None):
     model.train(True)
     metric_logger = misc.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', misc.SmoothedValue(window_size=1, fmt='{value:.6f}'))
-    header = 'Epoch: [{}]'.format(epoch)
+    header = 'Init Epoch!!!'
     print_freq = 20
 
     accum_iter = args.accum_iter
@@ -46,7 +60,8 @@ def train_one_epoch(model: torch.nn.Module,
             lr_sched.adjust_learning_rate(optimizer, data_iter_step / len(data_loader) + epoch, args)
 
         samples = samples.to(device, non_blocking=True)
-        batch_mask = mask[idx].to(device, non_blocking=True)
+        batch_mask = random_masking(samples, mask_ratio=mask_ratio)
+
         with torch.cuda.amp.autocast():
             loss, _, _, adaptive_mask = model(samples, mask=batch_mask)
             mask[idx] = adaptive_mask.detach().cpu()

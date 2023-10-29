@@ -8,24 +8,24 @@ import util.misc as misc
 import util.lr_sched as lr_sched
 
 
-def random_masking(imgs, mask_ratio, img_size=224, patch_size=16):
+def random_masking(data_len, mask_ratio, img_size=224, patch_size=16):
     """
     Perform per-sample random masking by per-sample shuffling.
     Per-sample shuffling is done by argsort random noise.
     x: [N, L, D], sequence
     """
-    N = imgs.shape[0]
+    N = data_len
     L = int(img_size/patch_size)**2
     len_keep = int(L * (1 - mask_ratio))
 
-    noise = torch.rand(N, L, device=imgs.device)  # noise in [0, 1]
+    noise = torch.rand(N, L)  # noise in [0, 1]
 
     # sort noise for each sample
     ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
     ids_restore = torch.argsort(ids_shuffle, dim=1)
 
     # generate the binary mask: 0 is keep, 1 is remove
-    mask = torch.ones([N, L], device=imgs.device)
+    mask = torch.ones([N, L])
     mask[:, :len_keep] = 0
     # unshuffle to get the binary mask
     mask = torch.gather(mask, dim=1, index=ids_restore)

@@ -44,7 +44,7 @@ def get_args_parser():
     parser = argparse.ArgumentParser('MAE pre-training', add_help=False)
     parser.add_argument('--batch_size', default=128, type=int,
                         help='Batch size per GPU (effective batch size is batch_size * accum_iter * # gpus')
-    parser.add_argument('--epochs', default=801, type=int)
+    parser.add_argument('--epochs', default=800, type=int)
     parser.add_argument('--accum_iter', default=16, type=int,
                         help='Accumulate gradient iterations (for increasing the effective batch size under memory constraints)')
 
@@ -90,7 +90,7 @@ def get_args_parser():
     parser.add_argument('--resume', default='',
                         help='resume from checkpoint')
 
-    parser.add_argument('--start_epoch', default=1, type=int, metavar='N',
+    parser.add_argument('--start_epoch', default=0, type=int, metavar='N',
                         help='start epoch')
     parser.add_argument('--num_workers', default=10, type=int)
     parser.add_argument('--pin_mem', action='store_true',
@@ -136,9 +136,7 @@ def main(args):
     # init mask
     mask_len = len(dataset_train)
     # init mask list
-    init_mask = [1] * 196
-    mask = [init_mask] * mask_len
-    mask = torch.tensor(mask, dtype=torch.float)
+    mask = init_epoch.random_masking(mask_len, 0.75)
 
     if True:  # args.distributed:
         num_tasks = misc.get_world_size()
@@ -165,7 +163,7 @@ def main(args):
     )
 
     # define the model
-    model = models_mae.__dict__[args.model](norm_pix_loss=args.norm_pix_loss)
+    model = models_mae.__dict__[args.model](norm_pix_loss=False)
 
     model.to(device)
 
@@ -198,37 +196,16 @@ def main(args):
     print(f"Start training for {args.epochs} epochs")
     start_time = time.time()
 
-    # ==========================================================
-    # preprocessing for the ramdon masking
-    if args.distributed:
-        data_loader_train.sampler.set_epoch(0)
-    train_stats = init_epoch.init_epoch(
-        model, data_loader_train,
-        optimizer, device, 0, loss_scaler, mask, mask_ratio=0.75,
-        log_writer=log_writer,
-        args=args
-    )
-
-    log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
-                 'epoch': "init epoch", }
-
-    if args.output_dir and misc.is_main_process():
-        if log_writer is not None:
-            log_writer.flush()
-        with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
-            f.write(json.dumps(log_stats) + "\n")
-    # ==========================================================
-
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             data_loader_train.sampler.set_epoch(epoch)
-        train_stats = train_one_epoch(
+        train_stats, mask = train_one_epoch(
             model, data_loader_train,
             optimizer, device, epoch, loss_scaler, mask,
             log_writer=log_writer,
             args=args
         )
-        if args.output_dir and (epoch % 200 == 0 or epoch + 1 == args.epochs):
+        if args.output_dir and ((epoch+1) % 200 == 0 or epoch + 1 == args.epochs):
             misc.save_model(
                 args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
                 loss_scaler=loss_scaler, epoch=epoch)

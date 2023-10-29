@@ -126,14 +126,15 @@ class MaskedAutoencoderViT(nn.Module):
         Perform per-sample adaptively masking by per-sample.
         Per-sample adapted is done by the loss distribution.
         x: [N, L, D], sequence
+        mask: [N, L]
         """
         N, L, D = x.shape  # batch, length, dim
 
         len_keep = int(L - (mask.sum() / N))
-        sort_mask = torch.argsort(mask)
-        ids_restore = torch.argsort(sort_mask)
+        ids_sort = torch.argsort(mask, dim=1)
+        ids_restore = torch.argsort(ids_sort, dim=1)
 
-        ids_keep = sort_mask[:, :len_keep]
+        ids_keep = ids_sort[:, :len_keep]
 
         x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
 
@@ -193,14 +194,9 @@ class MaskedAutoencoderViT(nn.Module):
         mask: [N, L], 0 is keep, 1 is remove, 
         """
         target = self.patchify(imgs)
-        if self.norm_pix_loss:
-            mean = target.mean(dim=-1, keepdim=True)
-            var = target.var(dim=-1, keepdim=True)
-            target = (target - mean) / (var + 1.e-6)**.5
-
         loss = (pred - target) ** 2
         loss = loss.mean(dim=-1)  # [N, L], mean loss per patch
-        adaptive_loss = loss.clone()
+        adaptive_loss = loss.detach()
         # mask_loss = loss * mask
         loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
 
@@ -208,7 +204,7 @@ class MaskedAutoencoderViT(nn.Module):
         N, L, D = target.shape
         len_keep = int(L - (mask.sum() / N))
 
-        # sort loss for each sample
+        # sort loss for each sample, keep the  loss
         ids_sort = torch.argsort(adaptive_loss, dim=1)
         ids_restore = torch.argsort(ids_sort, dim=1)
 

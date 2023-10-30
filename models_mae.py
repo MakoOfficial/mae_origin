@@ -198,6 +198,8 @@ class MaskedAutoencoderViT(nn.Module):
         loss = loss.mean(dim=-1)  # [N, L], mean loss per patch
         adaptive_loss = loss.detach()
         # mask_loss = loss * mask
+        if mask.sum() <= 0.:
+            print("the mask is none!!!")
         loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
 
         # generate adaptive mask

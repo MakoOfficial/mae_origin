@@ -197,6 +197,7 @@ def main(args):
     start_time = time.time()
 
     for epoch in range(args.start_epoch, args.epochs):
+
         if args.distributed:
             data_loader_train.sampler.set_epoch(epoch)
         train_stats, mask = train_one_epoch(

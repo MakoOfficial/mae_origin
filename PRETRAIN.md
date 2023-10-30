@@ -33,7 +33,8 @@ python submitit_pretrain.py \
 
 ```
 CUDA_VISIBLE_DEVICES=0,1 OMP_NUM_THREADS=1 python -m torch.distributed.launch --nproc_per_node=2 main_pretrain.py \
---batch_size 128 \
+--batch_size 64 \
+--accum_iter 32 \
 --model mae_vit_base_patch16 \
 --mask_ratio 0.75 \
 --epochs 800 \

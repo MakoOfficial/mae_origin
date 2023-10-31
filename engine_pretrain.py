@@ -47,7 +47,7 @@ def train_one_epoch(model: torch.nn.Module,
 
         samples = samples.to(device, non_blocking=True)
         batch_mask = mask[idx].to(device, non_blocking=True)
-        with torch.cuda.amp.autocast():
+        with torch.cuda.amp.autocast(enabled=False):
             loss, _, _, adaptive_mask = model(samples, mask=batch_mask)
             mask[idx] = adaptive_mask.detach().cpu()
         loss_value = loss.item()

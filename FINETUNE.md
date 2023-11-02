@@ -33,6 +33,9 @@ Evaluate ViT-Base in a single GPU (`${IMAGENET_DIR}` is a directory containing `
 ```
 python main_finetune.py --eval --resume mae_finetuned_vit_base.pth --model vit_base_patch16 --batch_size 16 --data_path ${IMAGENET_DIR}
 ```
+```
+python main_finetune.py --eval --resume ./checkpoint/mae_finetuned_vit_base.pth --model vit_base_patch16 --batch_size 8 --data_path E:/GitCode/BoneAgeAss-main/data/test1/train_valid_test
+```
 This should give:
 ```
 * Acc@1 83.664 Acc@5 96.530 loss 0.731

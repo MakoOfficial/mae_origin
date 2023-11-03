@@ -73,6 +73,20 @@ python submitit_finetune.py \
     --weight_decay 0.05 --drop_path 0.1 --reprob 0.25 --mixup 0.8 --cutmix 1.0 \
     --dist_eval --data_path ${IMAGENET_DIR}
 ```
+```
+CUDA_VISIBLE_DEVICES=0,1 OMP_NUM_THREADS=1 python -m torch.distributed.launch --nproc_per_node=2 main_finetune.py \
+--output_dir ${JOB_DIR} --job_dir ${JOB_DIR} \
+--batch_size 128 \
+--accum_iter 16 \
+--model vit_base_patch16 \
+--finetune ${PRETRAIN_CHKPT} \
+--nb_classes 120 \
+--epochs 100 \
+--warmup_epochs 40 \
+--blr 5e-4 --layer_decay 0.65 \
+--weight_decay 0.05 --drop_path 0.1 --reprob 0.25 --mixup 0.8 --cutmix 1.0 \
+--data_path ${IMAGENET_DIR}
+```
 - Install submitit (`pip install submitit`) first.
 - Here the effective batch size is 32 (`batch_size` per gpu) * 4 (`nodes`) * 8 (gpus per node) = 1024.
 - `blr` is the base learning rate. The actual `lr` is computed by the [linear scaling rule](https://arxiv.org/abs/1706.02677): `lr` = `blr` * effective batch size / 256.
